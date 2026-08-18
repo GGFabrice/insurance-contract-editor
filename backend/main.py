@@ -1,4 +1,7 @@
-
+from .calculs import (
+    calculer_prime_incorporation,
+    calculer_ristourne_retrait,
+)
 from fastapi import FastAPI, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
@@ -219,14 +222,20 @@ def creer_mouvement(
     commentaire: str | None = None,
     db: Session = Depends(get_db)
 ):
-    # Vérification du type de mouvement
+    # ========================================================
+    # 1. Vérifier le type de mouvement
+    # ========================================================
+
     if type_mouvement not in ["INCORPORATION", "RETRAIT"]:
         raise HTTPException(
             status_code=400,
             detail="Le type de mouvement doit être INCORPORATION ou RETRAIT."
         )
 
-    # Vérifier que le contrat existe
+    # ========================================================
+    # 2. Vérifier que le contrat existe
+    # ========================================================
+
     contrat = (
         db.query(Contrat)
         .filter(Contrat.contrat_id == contrat_id)
@@ -239,7 +248,10 @@ def creer_mouvement(
             detail="Contrat introuvable."
         )
 
-    # Vérifier que l'assuré existe
+    # ========================================================
+    # 3. Vérifier que l'assuré existe
+    # ========================================================
+
     assure = (
         db.query(Assure)
         .filter(Assure.assure_id == assure_id)
@@ -252,14 +264,53 @@ def creer_mouvement(
             detail="Assuré introuvable."
         )
 
-    # Vérifier que l'assuré appartient bien au contrat
+    # ========================================================
+    # 4. Vérifier que l'assuré appartient au contrat
+    # ========================================================
+
     if assure.contrat_id != contrat_id:
         raise HTTPException(
             status_code=400,
             detail="L'assuré n'appartient pas à ce contrat."
         )
 
-    # Création du mouvement
+    # ========================================================
+    # 5. Définir la date de fin de période
+    # ========================================================
+
+    if date_fin_periode is None:
+        date_fin_periode = contrat.date_fin
+
+    # ========================================================
+    # 6. Calcul de la prime / ristourne
+    # ========================================================
+
+    resultat_calcul = None
+
+    if type_mouvement == "INCORPORATION":
+
+        resultat_calcul = calculer_prime_incorporation(
+            prime_annuelle=float(
+                contrat.prime_nette_par_personne
+            ),
+            date_effet=date_mouvement,
+            date_fin_contrat=contrat.date_fin
+        )
+
+    elif type_mouvement == "RETRAIT":
+
+        resultat_calcul = calculer_ristourne_retrait(
+            prime_annuelle=float(
+                contrat.prime_nette_par_personne
+            ),
+            date_retrait=date_mouvement,
+            date_fin_contrat=contrat.date_fin
+        )
+
+    # ========================================================
+    # 7. Créer le mouvement
+    # ========================================================
+
     mouvement = MouvementEffectif(
         contrat_id=contrat_id,
         assure_id=assure_id,
@@ -274,6 +325,10 @@ def creer_mouvement(
     db.commit()
     db.refresh(mouvement)
 
+    # ========================================================
+    # 8. Retourner le mouvement + calcul
+    # ========================================================
+
     return {
         "message": "Mouvement créé avec succès.",
         "mouvement": {
@@ -285,5 +340,6 @@ def creer_mouvement(
             "date_debut_periode": mouvement.date_debut_periode,
             "date_fin_periode": mouvement.date_fin_periode,
             "commentaire": mouvement.commentaire
-        }
+        },
+        "calcul": resultat_calcul
     }
