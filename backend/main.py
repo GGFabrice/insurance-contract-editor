@@ -1,14 +1,24 @@
-from .calculs import (
-    calculer_prime_incorporation,
-    calculer_ristourne_retrait,
-)
 from fastapi import FastAPI, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
 
 from .database import get_db
-from .models import Souscripteur, Contrat, Assure, MouvementEffectif
+from .models import (
+    Souscripteur,
+    Contrat,
+    Assure,
+    MouvementEffectif,
+)
 
+from .calculs import (
+    calculer_prime_incorporation,
+    calculer_ristourne_retrait,
+)
+
+
+# ============================================================
+# APPLICATION
+# ============================================================
 
 app = FastAPI(
     title="Insurance Contract Editor",
@@ -52,7 +62,10 @@ def rechercher_souscripteurs(
         {
             "id": s.souscripteur_id,
             "code_souscripteur": s.code_souscripteur,
-            "raison_sociale": s.raison_sociale
+            "raison_sociale": s.raison_sociale,
+            "adresse": s.adresse,
+            "telephone": s.telephone,
+            "email": s.email,
         }
         for s in souscripteurs
     ]
@@ -96,7 +109,7 @@ def contrats_souscripteur(
             "prime_nette_par_personne": c.prime_nette_par_personne,
             "accessoire_taux": c.accessoire_taux,
             "taxe_taux": c.taxe_taux,
-            "actif": c.actif
+            "actif": c.actif,
         }
         for c in contrats
     ]
@@ -116,7 +129,10 @@ def assures_contrat(
         .filter(
             Assure.contrat_id == contrat_id
         )
-        .order_by(Assure.nom, Assure.prenom)
+        .order_by(
+            Assure.nom,
+            Assure.prenom
+        )
         .all()
     )
 
@@ -131,7 +147,7 @@ def assures_contrat(
             "lien_parente": a.lien_parente,
             "date_entree": a.date_entree,
             "date_sortie": a.date_sortie,
-            "actif": a.actif
+            "actif": a.actif,
         }
         for a in assures
     ]
@@ -166,7 +182,7 @@ def mouvements_contrat(
             "date_mouvement": m.date_mouvement,
             "date_debut_periode": m.date_debut_periode,
             "date_fin_periode": m.date_fin_periode,
-            "commentaire": m.commentaire
+            "commentaire": m.commentaire,
         }
         for m in mouvements
     ]
@@ -201,7 +217,7 @@ def mouvements_assure(
             "date_mouvement": m.date_mouvement,
             "date_debut_periode": m.date_debut_periode,
             "date_fin_periode": m.date_fin_periode,
-            "commentaire": m.commentaire
+            "commentaire": m.commentaire,
         }
         for m in mouvements
     ]
@@ -222,23 +238,31 @@ def creer_mouvement(
     commentaire: str | None = None,
     db: Session = Depends(get_db)
 ):
-    # ========================================================
-    # 1. Vérifier le type de mouvement
-    # ========================================================
+    # --------------------------------------------------------
+    # Vérification du type de mouvement
+    # --------------------------------------------------------
 
-    if type_mouvement not in ["INCORPORATION", "RETRAIT"]:
+    if type_mouvement not in [
+        "INCORPORATION",
+        "RETRAIT"
+    ]:
         raise HTTPException(
             status_code=400,
-            detail="Le type de mouvement doit être INCORPORATION ou RETRAIT."
+            detail=(
+                "Le type de mouvement doit être "
+                "INCORPORATION ou RETRAIT."
+            )
         )
 
-    # ========================================================
-    # 2. Vérifier que le contrat existe
-    # ========================================================
+    # --------------------------------------------------------
+    # Vérifier que le contrat existe
+    # --------------------------------------------------------
 
     contrat = (
         db.query(Contrat)
-        .filter(Contrat.contrat_id == contrat_id)
+        .filter(
+            Contrat.contrat_id == contrat_id
+        )
         .first()
     )
 
@@ -248,13 +272,15 @@ def creer_mouvement(
             detail="Contrat introuvable."
         )
 
-    # ========================================================
-    # 3. Vérifier que l'assuré existe
-    # ========================================================
+    # --------------------------------------------------------
+    # Vérifier que l'assuré existe
+    # --------------------------------------------------------
 
     assure = (
         db.query(Assure)
-        .filter(Assure.assure_id == assure_id)
+        .filter(
+            Assure.assure_id == assure_id
+        )
         .first()
     )
 
@@ -264,9 +290,9 @@ def creer_mouvement(
             detail="Assuré introuvable."
         )
 
-    # ========================================================
-    # 4. Vérifier que l'assuré appartient au contrat
-    # ========================================================
+    # --------------------------------------------------------
+    # Vérifier que l'assuré appartient au contrat
+    # --------------------------------------------------------
 
     if assure.contrat_id != contrat_id:
         raise HTTPException(
@@ -274,42 +300,31 @@ def creer_mouvement(
             detail="L'assuré n'appartient pas à ce contrat."
         )
 
-    # ========================================================
-    # 5. Définir la date de fin de période
-    # ========================================================
+    # --------------------------------------------------------
+    # Vérification des dates
+    # --------------------------------------------------------
 
-    if date_fin_periode is None:
-        date_fin_periode = contrat.date_fin
-
-    # ========================================================
-    # 6. Calcul de la prime / ristourne
-    # ========================================================
-
-    resultat_calcul = None
-
-    if type_mouvement == "INCORPORATION":
-
-        resultat_calcul = calculer_prime_incorporation(
-            prime_annuelle=float(
-                contrat.prime_nette_par_personne
-            ),
-            date_effet=date_mouvement,
-            date_fin_contrat=contrat.date_fin
+    if date_mouvement < contrat.date_effet:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La date du mouvement ne peut pas être "
+                "antérieure à la date d'effet du contrat."
+            )
         )
 
-    elif type_mouvement == "RETRAIT":
-
-        resultat_calcul = calculer_ristourne_retrait(
-            prime_annuelle=float(
-                contrat.prime_nette_par_personne
-            ),
-            date_retrait=date_mouvement,
-            date_fin_contrat=contrat.date_fin
+    if date_mouvement > contrat.date_fin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La date du mouvement ne peut pas être "
+                "postérieure à la date de fin du contrat."
+            )
         )
 
-    # ========================================================
-    # 7. Créer le mouvement
-    # ========================================================
+    # --------------------------------------------------------
+    # Création du mouvement
+    # --------------------------------------------------------
 
     mouvement = MouvementEffectif(
         contrat_id=contrat_id,
@@ -318,19 +333,45 @@ def creer_mouvement(
         date_mouvement=date_mouvement,
         date_debut_periode=date_debut_periode,
         date_fin_periode=date_fin_periode,
-        commentaire=commentaire
+        commentaire=commentaire,
     )
 
     db.add(mouvement)
     db.commit()
     db.refresh(mouvement)
 
-    # ========================================================
-    # 8. Retourner le mouvement + calcul
-    # ========================================================
+    # --------------------------------------------------------
+    # CALCUL FINANCIER
+    # --------------------------------------------------------
+
+    if type_mouvement == "INCORPORATION":
+
+        calcul = calculer_prime_incorporation(
+            float(contrat.prime_nette_par_personne),
+            date_mouvement,
+            contrat.date_fin,
+        )
+
+    else:
+
+        calcul = calculer_ristourne_retrait(
+            float(contrat.prime_nette_par_personne),
+            date_mouvement,
+            contrat.date_fin,
+        )
+
+        # Une ristourne doit être négative
+        calcul["montant_ristourne"] = -abs(
+            calcul["montant_ristourne"]
+        )
+
+    # --------------------------------------------------------
+    # Réponse
+    # --------------------------------------------------------
 
     return {
         "message": "Mouvement créé avec succès.",
+
         "mouvement": {
             "id": mouvement.mouvement_id,
             "contrat_id": mouvement.contrat_id,
@@ -339,7 +380,182 @@ def creer_mouvement(
             "date_mouvement": mouvement.date_mouvement,
             "date_debut_periode": mouvement.date_debut_periode,
             "date_fin_periode": mouvement.date_fin_periode,
-            "commentaire": mouvement.commentaire
+            "commentaire": mouvement.commentaire,
         },
-        "calcul": resultat_calcul
+
+        "calcul": calcul,
+    }
+
+
+# ============================================================
+# DETAIL D'UN MOUVEMENT
+# ============================================================
+
+@app.get("/api/mouvements/{mouvement_id}")
+def detail_mouvement(
+    mouvement_id: int,
+    db: Session = Depends(get_db)
+):
+    # --------------------------------------------------------
+    # Récupérer le mouvement
+    # --------------------------------------------------------
+
+    mouvement = (
+        db.query(MouvementEffectif)
+        .filter(
+            MouvementEffectif.mouvement_id == mouvement_id
+        )
+        .first()
+    )
+
+    if not mouvement:
+        raise HTTPException(
+            status_code=404,
+            detail="Mouvement introuvable."
+        )
+
+    # --------------------------------------------------------
+    # Récupérer l'assuré
+    # --------------------------------------------------------
+
+    assure = (
+        db.query(Assure)
+        .filter(
+            Assure.assure_id == mouvement.assure_id
+        )
+        .first()
+    )
+
+    if not assure:
+        raise HTTPException(
+            status_code=404,
+            detail="Assuré introuvable."
+        )
+
+    # --------------------------------------------------------
+    # Récupérer le contrat
+    # --------------------------------------------------------
+
+    contrat = (
+        db.query(Contrat)
+        .filter(
+            Contrat.contrat_id == mouvement.contrat_id
+        )
+        .first()
+    )
+
+    if not contrat:
+        raise HTTPException(
+            status_code=404,
+            detail="Contrat introuvable."
+        )
+
+    # --------------------------------------------------------
+    # Récupérer le souscripteur
+    # --------------------------------------------------------
+
+    souscripteur = (
+        db.query(Souscripteur)
+        .filter(
+            Souscripteur.souscripteur_id
+            == contrat.souscripteur_id
+        )
+        .first()
+    )
+
+    if not souscripteur:
+        raise HTTPException(
+            status_code=404,
+            detail="Souscripteur introuvable."
+        )
+
+    # --------------------------------------------------------
+    # CALCUL FINANCIER
+    # --------------------------------------------------------
+
+    if mouvement.type_mouvement == "INCORPORATION":
+
+        calcul = calculer_prime_incorporation(
+            float(contrat.prime_nette_par_personne),
+            mouvement.date_mouvement,
+            contrat.date_fin,
+        )
+
+    else:
+
+        calcul = calculer_ristourne_retrait(
+            float(contrat.prime_nette_par_personne),
+            mouvement.date_mouvement,
+            contrat.date_fin,
+        )
+
+        # Une ristourne doit apparaître comme une valeur négative
+        calcul["montant_ristourne"] = -abs(
+            calcul["montant_ristourne"]
+        )
+
+    # --------------------------------------------------------
+    # Réponse détaillée
+    # --------------------------------------------------------
+
+    return {
+        "mouvement": {
+            "id": mouvement.mouvement_id,
+            "type_mouvement": mouvement.type_mouvement,
+            "date_mouvement": mouvement.date_mouvement,
+            "date_debut_periode": mouvement.date_debut_periode,
+            "date_fin_periode": mouvement.date_fin_periode,
+            "commentaire": mouvement.commentaire,
+        },
+
+        "assure": {
+            "id": assure.assure_id,
+            "numero_assure": assure.numero_assure,
+            "nom": assure.nom,
+            "prenom": assure.prenom,
+            "date_naissance": assure.date_naissance,
+            "sexe": assure.sexe,
+            "lien_parente": assure.lien_parente,
+            "date_entree": assure.date_entree,
+            "date_sortie": assure.date_sortie,
+            "actif": assure.actif,
+        },
+
+        "contrat": {
+            "id": contrat.contrat_id,
+            "numero_police": contrat.numero_police,
+            "compagnie": contrat.compagnie,
+            "code_compagnie": contrat.code_compagnie,
+            "intermediaire": contrat.intermediaire,
+            "code_intermediaire": contrat.code_intermediaire,
+            "numero_compte": contrat.numero_compte,
+            "nature_risque": contrat.nature_risque,
+            "police": contrat.police,
+            "numero_intermediaire_police":
+                contrat.numero_intermediaire_police,
+            "duree": contrat.duree,
+            "echeance_annuelle": contrat.echeance_annuelle,
+            "fractionnement_prime":
+                contrat.fractionnement_prime,
+            "date_effet": contrat.date_effet,
+            "date_fin": contrat.date_fin,
+            "prime_nette_par_personne":
+                contrat.prime_nette_par_personne,
+            "accessoire_taux": contrat.accessoire_taux,
+            "taxe_taux": contrat.taxe_taux,
+            "actif": contrat.actif,
+        },
+
+        "souscripteur": {
+            "id": souscripteur.souscripteur_id,
+            "code_souscripteur":
+                souscripteur.code_souscripteur,
+            "raison_sociale":
+                souscripteur.raison_sociale,
+            "adresse": souscripteur.adresse,
+            "telephone": souscripteur.telephone,
+            "email": souscripteur.email,
+        },
+
+        "calcul": calcul,
     }
