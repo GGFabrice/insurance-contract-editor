@@ -559,3 +559,191 @@ def detail_mouvement(
 
         "calcul": calcul,
     }
+
+# ============================================================
+# PREPARATION DES DONNEES DE L'AVENANT
+# ============================================================
+
+@app.get("/api/mouvements/{mouvement_id}/avenant")
+def preparer_avenant(
+    mouvement_id: int,
+    db: Session = Depends(get_db)
+):
+    # --------------------------------------------------------
+    # RECUPERER LE MOUVEMENT
+    # --------------------------------------------------------
+
+    mouvement = (
+        db.query(MouvementEffectif)
+        .filter(
+            MouvementEffectif.mouvement_id == mouvement_id
+        )
+        .first()
+    )
+
+    if not mouvement:
+        raise HTTPException(
+            status_code=404,
+            detail="Mouvement introuvable."
+        )
+
+    # --------------------------------------------------------
+    # RECUPERER L'ASSURE
+    # --------------------------------------------------------
+
+    assure = (
+        db.query(Assure)
+        .filter(
+            Assure.assure_id == mouvement.assure_id
+        )
+        .first()
+    )
+
+    if not assure:
+        raise HTTPException(
+            status_code=404,
+            detail="Assuré introuvable."
+        )
+
+    # --------------------------------------------------------
+    # RECUPERER LE CONTRAT
+    # --------------------------------------------------------
+
+    contrat = (
+        db.query(Contrat)
+        .filter(
+            Contrat.contrat_id == mouvement.contrat_id
+        )
+        .first()
+    )
+
+    if not contrat:
+        raise HTTPException(
+            status_code=404,
+            detail="Contrat introuvable."
+        )
+
+    # --------------------------------------------------------
+    # RECUPERER LE SOUSCRIPTEUR
+    # --------------------------------------------------------
+
+    souscripteur = (
+        db.query(Souscripteur)
+        .filter(
+            Souscripteur.souscripteur_id
+            == contrat.souscripteur_id
+        )
+        .first()
+    )
+
+    if not souscripteur:
+        raise HTTPException(
+            status_code=404,
+            detail="Souscripteur introuvable."
+        )
+
+    # --------------------------------------------------------
+    # CALCUL FINANCIER
+    # --------------------------------------------------------
+
+    if mouvement.type_mouvement == "INCORPORATION":
+
+        calcul = calculer_prime_incorporation(
+            float(contrat.prime_nette_par_personne),
+            mouvement.date_mouvement,
+            contrat.date_fin
+        )
+
+        montant = calcul["montant"]
+
+    else:
+
+        calcul = calculer_ristourne_retrait(
+            float(contrat.prime_nette_par_personne),
+            mouvement.date_mouvement,
+            contrat.date_fin
+        )
+
+        # La ristourne est toujours négative
+        calcul["montant_ristourne"] = -abs(
+            calcul["montant_ristourne"]
+        )
+
+        montant = calcul["montant_ristourne"]
+
+    # --------------------------------------------------------
+    # PREPARATION DE L'AVENANT
+    # --------------------------------------------------------
+
+    return {
+        "avenant": {
+            "type_mouvement": mouvement.type_mouvement,
+            "date_mouvement": mouvement.date_mouvement,
+            "date_effet": mouvement.date_mouvement,
+            "numero_mouvement": mouvement.mouvement_id
+        },
+
+        "souscripteur": {
+            "id": souscripteur.souscripteur_id,
+            "code": souscripteur.code_souscripteur,
+            "raison_sociale": souscripteur.raison_sociale,
+            "adresse": souscripteur.adresse,
+            "telephone": souscripteur.telephone,
+            "email": souscripteur.email
+        },
+
+        "contrat": {
+            "id": contrat.contrat_id,
+            "numero_police": contrat.numero_police,
+            "compagnie": contrat.compagnie,
+            "code_compagnie": contrat.code_compagnie,
+            "intermediaire": contrat.intermediaire,
+            "code_intermediaire": contrat.code_intermediaire,
+            "numero_compte": contrat.numero_compte,
+            "nature_risque": contrat.nature_risque,
+            "police": contrat.police,
+            "date_effet": contrat.date_effet,
+            "date_fin": contrat.date_fin,
+            "fractionnement_prime":
+                contrat.fractionnement_prime
+        },
+
+        "assure": {
+            "id": assure.assure_id,
+            "numero_assure": assure.numero_assure,
+            "nom": assure.nom,
+            "prenom": assure.prenom,
+            "date_naissance": assure.date_naissance,
+            "sexe": assure.sexe,
+            "lien_parente": assure.lien_parente,
+            "date_entree": assure.date_entree,
+            "date_sortie": assure.date_sortie
+        },
+
+        "mouvement": {
+            "id": mouvement.mouvement_id,
+            "type": mouvement.type_mouvement,
+            "date": mouvement.date_mouvement,
+            "date_debut_periode":
+                mouvement.date_debut_periode,
+            "date_fin_periode":
+                mouvement.date_fin_periode,
+            "commentaire": mouvement.commentaire
+        },
+
+        "calcul": {
+            "prime_annuelle":
+                float(contrat.prime_nette_par_personne),
+
+            "prime_mensuelle":
+                calcul["prime_mensuelle"],
+
+            "nombre_mois":
+                calcul.get(
+                    "nombre_mois",
+                    calcul.get("nombre_mois_ristourne", 0)
+                ),
+
+            "montant": montant
+        }
+    }
