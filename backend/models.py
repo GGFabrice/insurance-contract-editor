@@ -33,7 +33,11 @@ class Souscripteur(Base):
         String(255),
         nullable=False
     )
-
+    type_souscripteur = Column(
+    String(30),
+    nullable=False,
+    default="ENTREPRISE"
+    )
     adresse = Column(String(500))
     telephone = Column(String(50))
     email = Column(String(255))

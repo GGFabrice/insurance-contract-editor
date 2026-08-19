@@ -94,3 +94,75 @@ def calculer_ristourne_retrait(
         "prime_mensuelle": prime_mensuelle,
         "montant_ristourne": montant_ristourne
     }
+def calculer_taxe(
+    prime_nette_totale: float,
+    accessoire: float,
+    type_souscripteur: str
+) -> dict:
+    """
+    Calcule la taxe selon le type de souscripteur.
+
+    ENTREPRISE  -> 3 %
+    PARTICULIER -> 8 %
+
+    Base taxable = prime nette totale + accessoire
+    """
+
+    if type_souscripteur == "ENTREPRISE":
+        taux_taxe = 0.03
+
+    elif type_souscripteur == "PARTICULIER":
+        taux_taxe = 0.08
+
+    else:
+        raise ValueError(
+            "Type de souscripteur invalide. "
+            "Valeurs autorisées : ENTREPRISE ou PARTICULIER."
+        )
+
+    base_taxable = prime_nette_totale + accessoire
+    taxe = base_taxable * taux_taxe
+    prime_ttc = base_taxable + taxe
+
+    return {
+        "type_souscripteur": type_souscripteur,
+        "base_taxable": base_taxable,
+        "taux_taxe": taux_taxe,
+        "taxe": taxe,
+        "prime_ttc": prime_ttc,
+    }
+def calculer_taxe(
+    prime_nette_totale: float,
+    accessoire: float,
+    type_souscripteur: str
+) -> dict:
+    """
+    Calcul de la taxe selon le type de souscripteur.
+
+    Base taxable = prime nette totale + accessoire
+
+    ENTREPRISE  -> 3 %
+    PARTICULIER -> 8 %
+    """
+
+    if type_souscripteur == "ENTREPRISE":
+        taux_taxe = 0.03
+    elif type_souscripteur == "PARTICULIER":
+        taux_taxe = 0.08
+    else:
+        raise ValueError(
+            "Type de souscripteur invalide. "
+            "Valeurs autorisées : ENTREPRISE ou PARTICULIER."
+        )
+
+    base_taxable = prime_nette_totale + accessoire
+    taxe = base_taxable * taux_taxe
+    prime_ttc = base_taxable + taxe
+
+    return {
+        "type_souscripteur": type_souscripteur,
+        "base_taxable": base_taxable,
+        "taux_taxe": taux_taxe,
+        "taxe": taxe,
+        "prime_ttc": prime_ttc,
+    }
