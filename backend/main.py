@@ -1,13 +1,16 @@
 from fastapi import FastAPI, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
-
 from .database import get_db
+
 from .models import (
     Souscripteur,
     Contrat,
+    College,
     Assure,
     MouvementEffectif,
+    Avenant,
+    LigneAvenant,
 )
 
 from .calculs import (
@@ -747,3 +750,77 @@ def preparer_avenant(
             "montant": montant
         }
     }
+
+# ============================================================
+# COLLEGES D'UN CONTRAT
+# ============================================================
+
+@app.get("/api/contrats/{contrat_id}/colleges")
+def colleges_contrat(
+    contrat_id: int,
+    db: Session = Depends(get_db)
+):
+    colleges = (
+        db.query(College)
+        .filter(
+            College.contrat_id == contrat_id
+        )
+        .order_by(
+            College.numero_college
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": c.college_id,
+            "contrat_id": c.contrat_id,
+            "numero_college": c.numero_college,
+            "libelle": c.libelle,
+            "prime_nette_par_personne":
+                c.prime_nette_par_personne,
+            "actif": c.actif,
+        }
+        for c in colleges
+    ]
+
+
+# ============================================================
+# ASSURES D'UN COLLEGE
+# ============================================================
+
+@app.get("/api/colleges/{college_id}/assures")
+def assures_college(
+    college_id: int,
+    db: Session = Depends(get_db)
+):
+    assures = (
+        db.query(Assure)
+        .filter(
+            Assure.college_id == college_id
+        )
+        .order_by(
+            Assure.nom,
+            Assure.prenom
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": a.assure_id,
+            "numero_assure": a.numero_assure,
+            "nom": a.nom,
+            "prenom": a.prenom,
+            "date_naissance": a.date_naissance,
+            "sexe": a.sexe,
+            "lien_parente": a.lien_parente,
+            "date_entree": a.date_entree,
+            "date_sortie": a.date_sortie,
+            "actif": a.actif,
+            "college_id": a.college_id,
+        }
+        for a in assures
+    ]
+
+

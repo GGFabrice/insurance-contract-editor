@@ -21,3 +21,4 @@ __pycache__/
 # Fichiers système Windows
 Thumbs.db
 Desktop.ini
+insurance_contract_db_backup.sql
