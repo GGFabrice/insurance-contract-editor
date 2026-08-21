@@ -1,0 +1,7 @@
+{
+  "contrat_id": 1,
+  "mouvement_ids": [8],
+  "periode_debut": "2026-09-01",
+  "periode_fin": "2026-09-30",
+  "commentaire": "Test avenant retrait septembre 2026"
+}

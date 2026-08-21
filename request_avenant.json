@@ -1,0 +1,7 @@
+{
+  "contrat_id": 1,
+  "mouvement_ids": [6, 7],
+  "periode_debut": "2026-08-01",
+  "periode_fin": "2026-08-31",
+  "commentaire": "Test avenant incorporation août 2026"
+}
