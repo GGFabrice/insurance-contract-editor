@@ -1,5 +1,7 @@
 from datetime import date
 from typing import List
+from fastapi.responses import FileResponse
+from backend.document_generator import generer_avenant_document
 
 from fastapi import FastAPI, Depends, Query, HTTPException
 from pydantic import BaseModel
@@ -2373,3 +2375,51 @@ def creer_avenant_retrait(
                 f"{str(exc)}"
             ),
         )
+    # ============================================================
+# TELECHARGEMENT D'UN AVENANT WORD
+# ============================================================
+
+@app.get("/api/avenants/{avenant_id}/download")
+def telecharger_avenant(
+    avenant_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Génère puis retourne le document Word d'un avenant.
+    """
+
+    avenant = (
+        db.query(Avenant)
+        .filter(Avenant.avenant_id == avenant_id)
+        .first()
+    )
+
+    if avenant is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Avenant introuvable."
+        )
+
+    try:
+        chemin = generer_avenant_document(avenant)
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc)
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la génération du document : {exc}"
+        )
+
+    return FileResponse(
+        path=str(chemin),
+        filename=chemin.name,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+    )
